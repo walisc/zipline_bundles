@@ -1,6 +1,5 @@
 [project]
 name = 'zipline_bundles'
-version = '0.1'
 dynamic = ["version"]
 requires-python = ">=3.10"
 dependencies = [

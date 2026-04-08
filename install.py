@@ -30,7 +30,7 @@ def main(force=True):
         sys.exit(1)
 
     ### source files and directory
-    src_dir=os.path.join(os.path.abspath(os.path.dirname(__file__)), 'zipline-bundles')
+    src_dir=os.path.join(os.path.abspath(os.path.dirname(__file__)), 'zipline_bundles')
     src_ext=['extension.py']
     src_ing=['ingester.py', 'iex.py', 'yahoo.py', 'binance.py']
 

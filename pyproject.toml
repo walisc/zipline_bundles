@@ -1,0 +1,20 @@
+[project]
+name = 'zipline_bundles'
+version = '0.1'
+dynamic = ["version"]
+requires-python = ">=3.12,<3.15"
+dependencies = [
+    "yahoofinancials>=1.20,<2.0.0",
+    "iexfinance>=0.5.0,<0.6.0",
+    "python-binance>=1.0.36,<2.0.0",
+    "logbook>=1.9.2,<2.0.0",
+]
+
+[tool.poetry]
+package-mode = false
+
+[tool.poetry.dependencies]
+yahoofinancials = "^1.20"
+iexfinance = "^0.5.0"
+python-binance = "^1.0.36"
+logbook = "^1.9.2"

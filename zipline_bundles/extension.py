@@ -3,7 +3,7 @@
 
 from pathlib import Path
 from zipline.data.bundles import register
-from zipline.data.bundles.ingester import csv_ingester # ingester.py need to be placed in zipline.data.bundles
+from zipline_bundles.ingester import csv_ingester
 
 _DEFAULT_PATH = str(Path.home() / '.zipline/csv/yahoo')
 
@@ -25,9 +25,9 @@ register(
     calendar_name='NYSE',
 )
 
-from zipline.data.bundles.ingester import direct_ingester
+from zipline_bundles.ingester  import direct_ingester
 
-from zipline.data.bundles import yahoo
+from zipline_bundles  import yahoo
 register('yahoo_direct', # bundle's name
          direct_ingester('YAHOO',
                          every_min_bar=False,
@@ -39,7 +39,7 @@ register('yahoo_direct', # bundle's name
          calendar_name='NYSE',
 )
 
-from zipline.data.bundles import iex
+from zipline_bundles import iex
 import exchange_calendars as xcals
 
 cal=xcals.get_calendar('NYSE')
@@ -55,7 +55,7 @@ register('iex', # bundle's name
          calendar_name='NYSE',
 )
 
-from zipline.data.bundles import binance
+from zipline_bundles  import binance
 
 register('binance_daily', # bundle's name
          direct_ingester('Binance Exchange',

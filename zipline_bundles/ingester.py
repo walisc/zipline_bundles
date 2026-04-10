@@ -436,3 +436,178 @@ class direct_ingester(ingester_base):
         adjustment_writer.write()
         if show_progress:
             log.info('writing completed')
+
+
+# [CW] Could properly optimize this better
+# to tired now:P and does the required job. Also, not so crucial that don't think it worth it
+class direct_ingester_async(ingester_base):
+    """inegester that directly downloads price data via callable downloader
+
+    This class can be used to implement an ingester that download
+    price data directly via REST API. A proper downloader callable
+    should be defined in order to download price data and convert is
+    to the format accepted by zipline.
+
+    """
+    def __init__(self, exchange, every_min_bar, symbol_list_env, downloader, symbol_list=None, filter_cb=None):
+        """creates an instance of csv ingester
+
+        :param exchange: an arbitrary name for the exchange providing
+        price data
+
+        :param every_min_bar: The price time series given to an
+        ingester may have 1-day or 1-minute frequency. This variable
+        being `True` means the frequency is 1-minute, otherwise the
+        price is provided daily.
+
+        :param symbol_list_env: The envireonment variable used to collect
+        the list of symbols whose price data should be
+        downloaded. After setting this parameter, for example by
+        `direct_ingester(...,symbol_list_env='SYMBOL_LIST'...)`, the
+        user can provide the symbols as a comma separated list, e.g.
+        `SYMBOL_LIST=SPY,AAPL zipline ingest -b <bundle_name>`.
+
+        :param symbol_list: an iterable providing the list of
+        symbols. The final list of symbol is the union of symbols
+        given by this parameter and those given by the environment
+        variable
+
+        :param downloader: a callable that downloads price data. It takes the following arguments:
+           - symbol: an string referring to the symbol name
+
+        :param filter_cb: The callback that is called after the
+        downloader is invoked. It takes a data frame and returns the
+        filtered dataframe
+
+        :type exchange: str
+        :type every_min_bar: bool
+        :type symbol_list_env: str
+        :type downloader: a callable that downloads price data
+        :type symbol_list: an iterable container of str type
+        :type filter_cb: a callable that takes a data frame and return a data frame
+
+        """
+        super().__init__(exchange, every_min_bar)
+        self._symbols = direct_ingester.create_symbol_list(symbol_list_env, symbol_list)
+        self._downloader = downloader
+        self._filter=filter_cb
+
+    @staticmethod
+    def create_symbol_list(symbol_list_env, symbol_list, show_progress=False):
+        """creates and returns the symbol list
+
+
+        The symbol list is computed by taking the union of the symbols
+        in `symbol_list` and those listed in the environment variable
+        with the name given by `symbol_list_env`.
+
+        It tries first to set the csv directory from environment
+        variable. If no environment variable is given, or it is not
+        set by the user, it will check self._csvdir for a valid
+        directory. If that fails then `sys.exit()` will be called.
+
+        :param show_progress: if `True`, it will be verbose
+        :type show_progress: bool
+
+        :return: the symbol list
+        :rtype: tuple of str
+
+        """
+        symbols=set()
+
+        if symbol_list_env:
+            env_list = os.environ.get(symbol_list_env, '') # comma seperated
+            # add symbols from environment variable
+            symbols=symbols.union([sym for sym in env_list.split(',') if sym.strip()])
+
+        # add symbols from |symbol_list|
+        if symbol_list:
+            symbols=symbols.union([sym for sym in symbol_list if sym.strip()])
+
+        if show_progress:
+            if len(symbols) == 0:
+                log.warn("no symbol were added.")
+            else:
+                log.info("price data of symbols {} to be ".format(symbols))
+        return tuple(symbols)
+
+    def _update_symbol_metadata(self, symbol_index, symbol, df):
+        """update metadata for the given symbol
+
+        Metadata are extracted from the given dataframe `df`, which is
+        the price data read from csv file or downloaded via the firm
+        API. They are stored in `self._df_metadata[symbol_index]`
+
+        :param symbol_index: the symbol index
+        :param symbol: the symbol name
+        :param df: the dataframe storing symbol's price data
+
+        :type symbol_index: int
+        :type symbol: str
+        :type df: pandas.DataFrame
+        """
+        start_date = df.index[0]
+        end_date = df.index[-1]
+        autoclose_date = end_date + pd.Timedelta(days=1)
+        self._df_metadata.iloc[symbol_index] = start_date, end_date, autoclose_date, symbol, self._exchange
+
+    async def _read_and_convert(self, calendar, show_progress):
+        """returns the generator of symbol index and the dataframe storing its price data
+        """
+        assert self._symbols, (
+            f"Symbol list for bundle {self._exchange} is empty. Consider "
+            "setting the proper environment variable, or passing a symobol "
+            "list at bundle registration time."
+        )
+        results = []
+        with maybe_show_progress(
+                self._symbols,
+                show_progress,
+                label=f"Downloading from {self._exchange}: ",
+                length=len(self._symbols),
+                item_show_func=lambda s: s,
+        ) as it:
+            for symbol_index, symbol in enumerate(it):
+                # read data from csv file and set the index
+                df_data = await self._downloader(symbol)
+                # apply filter when it is provided
+                if self._filter is not None:
+                    df_data = self._filter(df_data)
+                self._update_symbol_metadata(symbol_index, symbol, df_data)
+                results.append((symbol_index, df_data))
+
+        return results
+
+    async def __call__(self,
+                 environ,
+                 asset_db_writer,
+                 minute_bar_writer,
+                 daily_bar_writer,
+                 adjustment_writer,
+                 calendar,
+                 start_session,
+                 end_session,
+                 cache,
+                 show_progress,
+                 output_dir):
+        """implements the actual ingest function
+
+        The order of calls are as follows
+        1. `create_metadata()`
+        2. `self._read_and_convert()`
+        """
+        if show_progress:
+            log.info('symbols are: {0}'.format(self._symbols))
+        self._df_metadata=create_metadata(len(self._symbols))
+        if show_progress:
+            log.info('writing data...')
+        if self._every_min_bar:
+            minute_bar_writer.write(await self._read_and_convert(calendar, show_progress), show_progress=show_progress)
+        else:
+            daily_bar_writer.write(await self._read_and_convert(calendar, show_progress), show_progress=show_progress)
+        if show_progress:
+            log.info('meta data:\n{0}'.format(self._df_metadata))
+        asset_db_writer.write(equities=self._df_metadata)
+        adjustment_writer.write()
+        if show_progress:
+            log.info('writing completed')

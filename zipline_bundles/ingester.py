@@ -449,7 +449,7 @@ class direct_ingester_async(ingester_base):
     to the format accepted by zipline.
 
     """
-    def __init__(self, exchange, every_min_bar, symbol_list_env, downloader, symbol_list=None, filter_cb=None):
+    def __init__(self, exhange_details, every_min_bar, symbol_list_env, downloader, symbol_list=None, filter_cb=None):
         """creates an instance of csv ingester
 
         :param exchange: an arbitrary name for the exchange providing
@@ -479,7 +479,7 @@ class direct_ingester_async(ingester_base):
         downloader is invoked. It takes a data frame and returns the
         filtered dataframe
 
-        :type exchange: str
+        :type exchange: any
         :type every_min_bar: bool
         :type symbol_list_env: str
         :type downloader: a callable that downloads price data
@@ -487,7 +487,8 @@ class direct_ingester_async(ingester_base):
         :type filter_cb: a callable that takes a data frame and return a data frame
 
         """
-        super().__init__(exchange, every_min_bar)
+        super().__init__(exhange_details.iloc[0].exchange, every_min_bar)
+        self._exhange_details = exhange_details
         self._symbols = direct_ingester.create_symbol_list(symbol_list_env, symbol_list)
         self._downloader = downloader
         self._filter=filter_cb
@@ -607,7 +608,7 @@ class direct_ingester_async(ingester_base):
             daily_bar_writer.write(await self._read_and_convert(calendar, show_progress), show_progress=show_progress)
         if show_progress:
             log.info('meta data:\n{0}'.format(self._df_metadata))
-        asset_db_writer.write(equities=self._df_metadata)
+        asset_db_writer.write(equities=self._df_metadata, exchanges=self._exhange_details)
         adjustment_writer.write()
         if show_progress:
             log.info('writing completed')

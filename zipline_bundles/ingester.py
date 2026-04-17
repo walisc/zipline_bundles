@@ -571,6 +571,8 @@ class direct_ingester_async(ingester_base):
             for symbol_index, symbol in enumerate(it):
                 # read data from csv file and set the index
                 df_data = await self._downloader(symbol)
+                if df_data.empty:
+                    continue
                 # apply filter when it is provided
                 if self._filter is not None:
                     df_data = self._filter(df_data)
